@@ -1,0 +1,78 @@
+# CloudOps Market Data Pipeline (Local Prototype)
+
+A Python-based prototype of a **real-time market data pipeline**, built to learn modern backend and cloud-native concepts before deploying to AWS.
+
+This project incrementally evolves from a simple script into a small system with:
+
+- Periodic ingestion of live market prices from a public API
+- Storage of price history in a local database
+- A FastAPI-based REST API to query the data
+- Basic anomaly detection on recent price movements
+
+---
+
+## Goals
+
+- Learn practical **Python** coming from a Java/Spring Boot background
+- Understand the flow **API → Ingestion → Storage → REST API → Monitoring**
+- Prepare for a production-grade implementation on **AWS + PostgreSQL**
+- Build portfolio-grade code that can later be extended with:
+  - Cloud deployment (EC2/RDS/Terraform)
+  - Proper observability (CloudWatch, dashboards)
+  - ML-based anomaly/fraud detection
+
+---
+
+## Tech Stack (Current Local Prototype)
+
+- **Language:** Python 3.10+
+- **Runtime:** Local virtual environment (`.venv`)
+- **HTTP Client:** `requests`
+- **Web Framework:** FastAPI
+- **App Server:** Uvicorn
+- **Database (local dev):** SQLite via `sqlmodel`
+- **Package Management:** `pip`
+- **Editor:** VS Code (recommended)
+
+---
+
+## Features (Milestones)
+
+### Phase 1 – Basic Ingestion
+
+- `fetch_once.py`
+  - Fetches a single price (e.g. BTC/USD) from a public API
+  - Prints the value to stdout
+
+- `collector.py`
+  - Polls the API in a loop
+  - Keeps a short in-memory history of prices with timestamps
+
+### Phase 2 – REST API with In-Memory Storage
+
+- `api.py` (v1)
+  - `POST /collect-once` – fetches a price and appends to in-memory list
+  - `GET /history` – returns the collected price history
+
+### Phase 3 – SQLite-backed Storage
+
+- `db.py` + `api.py` (v2)
+  - SQLite database (`prices.db`) using `sqlmodel`
+  - `POST /collect-once` – persists price points to the database
+  - `GET /history` – reads recent price history from the database
+
+### Phase 4 – Simple Anomaly Detection
+
+- `GET /anomaly`
+  - Compares the last two price points
+  - Flags an anomaly if the relative change exceeds a threshold (e.g. 5%)
+
+---
+
+## Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/<your-username>/cloudops-pipeline-for-stocks.git
+cd cloudops-pipeline-for-stocks/market-pipeline
