@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from datetime import datetime
 import requests
 from typing import List, Dict
+from db import init_db, add_price_point, get_price_history
 
 app = FastAPI()
 
@@ -18,17 +19,18 @@ def fetch_price() -> float:
     data = response.json()
     return data["bitcoin"]['usd']
 
+@app.on_event("startup")
+def startup_event():
+    init_db()
+    print("Database initialized")
+
 @app.post("/collect-once")
 def collect_once():
     p = fetch_price()
-    point = {
-        "timestamp": datetime.now().isoformat(),
-        "price": p
-    }
-    history.append(point)
+    point = add_price_point(p)
     return point
 
 @app.get("/history")
-def get_history():
-    return history
+def get_history(limit: int = 100):
+    return get_price_history(limit)
 
