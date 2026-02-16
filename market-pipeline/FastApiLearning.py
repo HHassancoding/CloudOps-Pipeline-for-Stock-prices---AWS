@@ -1,8 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from datetime import datetime
 import requests
 from typing import List, Dict
-from db import init_db, add_price_point, get_price_history
+from db import get_last_two, init_db, add_price_point, get_price_history
 
 app = FastAPI()
 
@@ -33,4 +33,20 @@ def collect_once():
 @app.get("/history")
 def get_history(limit: int = 100):
     return get_price_history(limit)
+
+@app.get("/anomaly")
+def check_anomaly():
+    last_two = get_last_two()
+    if len(last_two) < 2:
+        return {"anomaly": False, "message": "Not enough data points"}
+    diff = abs(last_two[0].price - last_two[1].price)
+    threshold = 100  # Example threshold for anomaly detection
+    is_anomaly = diff >= threshold
+    return {
+        "anomaly": is_anomaly,
+        "latest_price": last_two[0].price,
+        "second_last_price": last_two[1].price,
+        "price_difference": diff,
+        
+    }
 

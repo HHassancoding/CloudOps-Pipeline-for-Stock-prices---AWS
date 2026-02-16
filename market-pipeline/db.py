@@ -26,3 +26,8 @@ def get_price_history(limit: int =100) -> List[PricePoint]:
     with Session(engine) as session:
         statement = select(PricePoint).order_by(PricePoint.timestamp.desc()).limit(limit)
         return list(session.exec(statement))
+    
+def get_last_two() -> List[PricePoint]:
+    with Session(engine) as session:
+        statement = select(PricePoint).order_by(PricePoint.timestamp.desc()).limit(2)
+        return list(session.exec(statement))
