@@ -1,12 +1,7 @@
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 from datetime import datetime
-from typing import Optional, List
-
-
-class PricePoint(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    timestamp: datetime
-    price: float
+from typing import List
+from .models import PricePoint
 
 engine = create_engine("sqlite:///./prices.db")
 
