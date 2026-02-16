@@ -1,12 +1,6 @@
-from fastapi import FastAPI, Body
-from datetime import datetime
+from .models import PricePoint
+from .db import add_price_point, get_price_history, get_last_two
 import requests
-from typing import List, Dict
-from db import get_last_two, init_db, add_price_point, get_price_history
-
-app = FastAPI()
-
-history: List[Dict] = []
 
 def fetch_price() -> float:
     url = "https://api.coingecko.com/api/v3/simple/price"
@@ -19,22 +13,13 @@ def fetch_price() -> float:
     data = response.json()
     return data["bitcoin"]['usd']
 
-@app.on_event("startup")
-def startup_event():
-    init_db()
-    print("Database initialized")
 
-@app.post("/collect-once")
 def collect_once():
     p = fetch_price()
     point = add_price_point(p)
     return point
 
-@app.get("/history")
-def get_history(limit: int = 100):
-    return get_price_history(limit)
 
-@app.get("/anomaly")
 def check_anomaly():
     last_two = get_last_two()
     if len(last_two) < 2:
@@ -49,4 +34,3 @@ def check_anomaly():
         "price_difference": diff,
         
     }
-
