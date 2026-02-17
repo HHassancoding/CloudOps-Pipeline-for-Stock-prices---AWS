@@ -14,20 +14,33 @@ def init_db():
     SQLModel.metadata.create_all(engine)
 
 
-def add_price_point(price: float):
+def add_price_point(price: float, symbol: str):
+    """Add a price point for a specific cryptocurrency symbol."""
     with Session(engine) as session:
-        point = PricePoint(timestamp=datetime.utcnow(), price=price)
+        point = PricePoint(timestamp=datetime.utcnow(), price=price, symbol=symbol)
         session.add(point)
         session.commit()
         session.refresh(point)
         return point
     
-def get_price_history(limit: int =100) -> List[PricePoint]:
+def get_price_history(symbol: str, limit: int = 100) -> List[PricePoint]:
+    """Get price history for a specific cryptocurrency symbol."""
     with Session(engine) as session:
-        statement = select(PricePoint).order_by(PricePoint.timestamp.desc()).limit(limit)
+        statement = (
+            select(PricePoint)
+            .where(PricePoint.symbol == symbol)
+            .order_by(PricePoint.timestamp.desc())
+            .limit(limit)
+        )
         return list(session.exec(statement))
     
-def get_last_two() -> List[PricePoint]:
+def get_last_two(symbol: str) -> List[PricePoint]:
+    """Get the last two price points for a specific cryptocurrency symbol."""
     with Session(engine) as session:
-        statement = select(PricePoint).order_by(PricePoint.timestamp.desc()).limit(2)
+        statement = (
+            select(PricePoint)
+            .where(PricePoint.symbol == symbol)
+            .order_by(PricePoint.timestamp.desc())
+            .limit(2)
+        )
         return list(session.exec(statement))
