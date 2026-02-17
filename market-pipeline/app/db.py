@@ -2,8 +2,13 @@ from sqlmodel import SQLModel, Field, create_engine, Session, select
 from datetime import datetime
 from typing import List
 from .models import PricePoint
+import os
+from dotenv import load_dotenv  
 
-engine = create_engine("sqlite:///./prices.db")
+load_dotenv()  # Load environment variables from .env file
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./prices.db")
+engine = create_engine(DATABASE_URL)
 
 def init_db():
     SQLModel.metadata.create_all(engine)
