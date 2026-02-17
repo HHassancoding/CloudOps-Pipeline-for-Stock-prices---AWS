@@ -67,12 +67,130 @@ This project incrementally evolves from a simple script into a small system with
   - Compares the last two price points
   - Flags an anomaly if the relative change exceeds a threshold (e.g. 5%)
 
+### Phase 5 – Multi-Symbol Support (Current)
+
+- **Multiple Cryptocurrency Support**
+  - Track BTC, ETH, SOL, ADA, DOT prices independently
+  - Symbol-to-CoinGecko ID mapping
+  - Separate price history per cryptocurrency
+  
+- **Updated API Endpoints:**
+  - `POST /collect-once/{symbol}` – fetch and store price for specific symbol
+  - `GET /history/{symbol}` – get price history for specific symbol
+  - `GET /anomaly/{symbol}` – check anomalies for specific symbol
+  - `GET /supported-symbols` – list all supported cryptocurrencies
+  
+- **Quality Improvements:**
+  - HTTPException-based error handling
+  - Input validation with Pydantic
+  - Comprehensive pytest test suite
+  - Symbol validation and normalization
+
+---
+
+## API Usage
+
+### Supported Symbols
+
+Current supported cryptocurrencies:
+- **BTC** → Bitcoin
+- **ETH** → Ethereum
+- **SOL** → Solana
+- **ADA** → Cardano
+- **DOT** → Polkadot
+
+### Endpoints
+
+#### List Supported Symbols
+```bash
+curl http://localhost:8000/supported-symbols
+```
+
+#### Collect Price for a Symbol
+```bash
+# Collect Bitcoin price
+curl -X POST http://localhost:8000/collect-once/BTC
+
+# Collect Ethereum price
+curl -X POST http://localhost:8000/collect-once/ETH
+
+# Symbol is case-insensitive
+curl -X POST http://localhost:8000/collect-once/btc
+```
+
+#### Get Price History
+```bash
+# Get last 100 BTC prices (default)
+curl http://localhost:8000/history/BTC
+
+# Get last 50 ETH prices
+curl http://localhost:8000/history/ETH?limit=50
+```
+
+#### Check for Anomalies
+```bash
+# Check BTC for price anomalies
+curl http://localhost:8000/anomaly/BTC
+
+# Check ETH for price anomalies
+curl http://localhost:8000/anomaly/ETH
+```
+
+#### Interactive API Documentation
+Visit `http://localhost:8000/docs` for Swagger UI with interactive API testing.
+
 ---
 
 ## Getting Started
+
+### Prerequisites
+- Python 3.10+
+- pip
 
 ### 1. Clone the repository
 
 ```bash
 git clone https://github.com/<your-username>/cloudops-pipeline-for-stocks.git
 cd cloudops-pipeline-for-stocks/market-pipeline
+```
+
+### 2. Create virtual environment and install dependencies
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 3. Database Setup
+
+**Important:** If upgrading from a previous version without multi-symbol support, delete the old database:
+
+```bash
+# Delete SQLite database (if exists)
+rm prices.db  # On Windows: del prices.db
+
+# Or for PostgreSQL, drop the tables manually
+```
+
+The database will be automatically recreated with the new schema on first startup.
+
+### 4. Run the application
+
+```bash
+cd market-pipeline
+uvicorn app.main:app --reload
+```
+
+The API will be available at `http://localhost:8000`
+
+### 5. Run tests
+
+```bash
+pytest tests/ -v
+```
+
+For coverage report:
+```bash
+pytest tests/ --cov=app --cov-report=html
+```

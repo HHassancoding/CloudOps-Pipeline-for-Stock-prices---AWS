@@ -4,3 +4,5 @@ requests
 sqlmodel
 python-dotenv
 psycopg2-binary
+pytest
+httpx
