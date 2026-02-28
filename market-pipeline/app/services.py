@@ -1,11 +1,20 @@
-from .models import PricePoint, SYMBOL_TO_ID, validate_symbol
-from .db import add_price_point, get_price_history, get_last_two
+from .models import PricePoint, SYMBOL_TO_ID, validate_symbol, Rule, Delivery
+from .db import (
+    add_price_point,
+    get_price_history,
+    get_last_two,
+    create_rule,
+    list_rules,
+    update_rule,
+    get_rule,
+    get_rule_deliveries,
+)
 import requests
 import time
 import logging
 import random
 import threading
-from typing import Optional
+from typing import Optional, List
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -289,3 +298,116 @@ def check_anomaly(symbol: str):
             exc_info=True
         )
         raise
+
+
+def _validate_rule_inputs(
+    symbol: str,
+    threshold: float,
+    is_above: bool,
+    webhook_url: str,
+    cooldown_seconds: int,
+) -> str:
+    normalized_symbol = validate_symbol(symbol)
+    if threshold <= 0:
+        raise ValueError("Threshold must be greater than 0")
+    if cooldown_seconds < 0:
+        raise ValueError("Cooldown must be 0 or greater")
+    if not webhook_url or not webhook_url.startswith("http"):
+        raise ValueError("Webhook URL must be a valid http/https URL")
+    if not isinstance(is_above, bool):
+        raise ValueError("Direction must be a boolean is_above")
+    return normalized_symbol
+
+
+def create_rule_service(
+    symbol: str,
+    threshold: float,
+    is_above: bool,
+    webhook_url: str,
+    cooldown_seconds: int,
+    enabled: bool = True,
+) -> Rule:
+    """Create a new rule after validation."""
+    start_time = time.time()
+    normalized_symbol = _validate_rule_inputs(
+        symbol=symbol,
+        threshold=threshold,
+        is_above=is_above,
+        webhook_url=webhook_url,
+        cooldown_seconds=cooldown_seconds,
+    )
+
+    rule = create_rule(
+        symbol=normalized_symbol,
+        threshold=threshold,
+        is_above=is_above,
+        webhook_url=webhook_url,
+        cooldown_seconds=cooldown_seconds,
+        enabled=enabled,
+    )
+    duration_ms = (time.time() - start_time) * 1000
+    logger.info(
+        "Rule created via service",
+        extra={
+            "symbol": normalized_symbol,
+            "rule_id": rule.id,
+            "duration_ms": duration_ms,
+            "rows_affected": 1,
+        },
+    )
+    return rule
+
+
+def list_rules_service() -> List[Rule]:
+    """List all rules."""
+    start_time = time.time()
+    rules = list_rules()
+    duration_ms = (time.time() - start_time) * 1000
+    logger.info(
+        "Rules listed via service",
+        extra={"duration_ms": duration_ms, "rows_affected": len(rules)},
+    )
+    return rules
+
+
+def update_rule_service(rule_id: int, updates: dict) -> Rule:
+    """Update rule fields after validation."""
+    allowed_fields = {"enabled", "threshold", "cooldown_seconds", "webhook_url", "is_above"}
+    invalid_fields = set(updates.keys()) - allowed_fields
+    if invalid_fields:
+        raise ValueError(f"Unsupported update fields: {', '.join(sorted(invalid_fields))}")
+
+    if "threshold" in updates and updates["threshold"] is not None:
+        if updates["threshold"] <= 0:
+            raise ValueError("Threshold must be greater than 0")
+    if "cooldown_seconds" in updates and updates["cooldown_seconds"] is not None:
+        if updates["cooldown_seconds"] < 0:
+            raise ValueError("Cooldown must be 0 or greater")
+    if "webhook_url" in updates and updates["webhook_url"] is not None:
+        if not updates["webhook_url"].startswith("http"):
+            raise ValueError("Webhook URL must be a valid http/https URL")
+    if "is_above" in updates and updates["is_above"] is not None:
+        if not isinstance(updates["is_above"], bool):
+            raise ValueError("Direction must be a boolean is_above")
+
+    rule = update_rule(rule_id, updates)
+    if not rule:
+        raise ValueError(f"Rule not found: {rule_id}")
+    return rule
+
+
+def list_rule_deliveries_service(rule_id: int, limit: int = 100) -> List[Delivery]:
+    """List deliveries for a rule."""
+    if limit <= 0:
+        raise ValueError("Limit must be greater than 0")
+
+    existing_rule = get_rule(rule_id)
+    if not existing_rule:
+        raise ValueError(f"Rule not found: {rule_id}")
+
+    deliveries = get_rule_deliveries(rule_id, limit=limit)
+    logger.info(
+        "Rule deliveries listed via service",
+        extra={"rule_id": rule_id, "rows_affected": len(deliveries)},
+    )
+    return deliveries

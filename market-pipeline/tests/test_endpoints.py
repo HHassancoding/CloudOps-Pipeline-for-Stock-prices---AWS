@@ -246,3 +246,107 @@ class TestSupportedSymbolsEndpoint:
         assert "ETH" in data["symbols"]
         assert data["mappings"]["BTC"] == "bitcoin"
         assert data["mappings"]["ETH"] == "ethereum"
+
+
+class TestRulesEndpoints:
+    """Test rules and deliveries endpoints."""
+
+    def test_create_rule_success(self, client):
+        payload = {
+            "symbol": "BTC",
+            "threshold": 50000.0,
+            "is_above": True,
+            "webhook_url": "https://example.com/webhook",
+            "cooldown_seconds": 300,
+            "enabled": True,
+        }
+
+        response = client.post("/rules", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["symbol"] == "BTC"
+        assert data["threshold"] == 50000.0
+        assert data["is_above"] is True
+        assert data["webhook_url"] == "https://example.com/webhook"
+        assert data["cooldown_seconds"] == 300
+        assert data["enabled"] is True
+        assert "id" in data
+
+    def test_create_rule_invalid_symbol(self, client):
+        payload = {
+            "symbol": "INVALID",
+            "threshold": 50000.0,
+            "is_above": True,
+            "webhook_url": "https://example.com/webhook",
+            "cooldown_seconds": 300,
+            "enabled": True,
+        }
+
+        response = client.post("/rules", json=payload)
+
+        assert response.status_code == 400
+        assert "Unsupported symbol" in response.json()["detail"]
+
+    def test_list_rules(self, client):
+        payload = {
+            "symbol": "BTC",
+            "threshold": 50000.0,
+            "is_above": True,
+            "webhook_url": "https://example.com/webhook",
+            "cooldown_seconds": 300,
+            "enabled": True,
+        }
+        client.post("/rules", json=payload)
+        payload["symbol"] = "ETH"
+        payload["threshold"] = 3000.0
+        client.post("/rules", json=payload)
+
+        response = client.get("/rules")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert {item["symbol"] for item in data} == {"BTC", "ETH"}
+
+    def test_update_rule(self, client):
+        payload = {
+            "symbol": "BTC",
+            "threshold": 50000.0,
+            "is_above": True,
+            "webhook_url": "https://example.com/webhook",
+            "cooldown_seconds": 300,
+            "enabled": True,
+        }
+        create_response = client.post("/rules", json=payload)
+        rule_id = create_response.json()["id"]
+
+        update_payload = {"threshold": 51000.0, "enabled": False}
+        update_response = client.patch(f"/rules/{rule_id}", json=update_payload)
+
+        assert update_response.status_code == 200
+        data = update_response.json()
+        assert data["threshold"] == 51000.0
+        assert data["enabled"] is False
+
+    def test_update_rule_not_found(self, client):
+        update_response = client.patch("/rules/9999", json={"enabled": False})
+        assert update_response.status_code == 404
+
+    def test_rule_deliveries_empty(self, client):
+        payload = {
+            "symbol": "BTC",
+            "threshold": 50000.0,
+            "is_above": True,
+            "webhook_url": "https://example.com/webhook",
+            "cooldown_seconds": 300,
+            "enabled": True,
+        }
+        create_response = client.post("/rules", json=payload)
+        rule_id = create_response.json()["id"]
+
+        response = client.get(f"/rules/{rule_id}/deliveries")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data == []

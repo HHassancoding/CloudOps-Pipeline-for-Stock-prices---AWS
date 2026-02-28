@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A Python-based prototype market data pipeline for cryptocurrency prices. The system fetches live data from CoinGecko API, stores price history in PostgreSQL/SQLite, and provides FastAPI endpoints to query anomalies and historical data. Built to transition from local development to AWS cloud deployment.
+A Python-based prototype market data pipeline for cryptocurrency prices. The system fetches live data from CoinGecko API, stores price history in PostgreSQL/SQLite, and provides FastAPI endpoints to query anomalies and historical data. It also supports alert rules and delivery tracking so a worker can evaluate rules and record notification outcomes. Built to transition from local development to AWS cloud deployment.
 
 **Supported Symbols:** BTC, ETH, SOL, ADA, DOT
 
@@ -22,7 +22,7 @@ A Python-based prototype market data pipeline for cryptocurrency prices. The sys
 All modules use **structured JSON logging** via `JSONFormatter` in [logging_config.py](app/logging_config.py). Every important operation logs with:
 - Trace ID (per-request context variable)
 - Duration in milliseconds for performance tracking
-- Custom fields: `symbol`, `status_code`, `rows_affected`, `client_ip`
+- Custom fields: `symbol`, `status_code`, `rows_affected`, `client_ip`, `rule_id`, `delivery_id`
 
 **Example:**
 ```python
@@ -48,6 +48,8 @@ Do NOT use plain `print()` statements; always use the logger from `get_logger(__
 
 1. **Models** ([models.py](app/models.py))
    - `PricePoint`: SQLModel table with `id`, `timestamp`, `price`, `symbol`
+   - `Rule`: SQLModel table for alert rules (symbol, threshold, direction, webhook, cooldown, enabled)
+   - `Delivery`: SQLModel table for rule executions (rule_id, status, attempts, last_error, timestamps)
    - `SYMBOL_TO_ID`: Dict mapping cryptocurrency symbols to CoinGecko API IDs
    - `validate_symbol()`: Normalizes and validates input symbols
 
@@ -55,6 +57,10 @@ Do NOT use plain `print()` statements; always use the logger from `get_logger(__
    - `fetch_price(symbol, client_ip)`: Fetches current price from CoinGecko with retry/backoff logic
    - `collect_once(symbol, client_ip)`: Wraps fetch + insert into one transaction
    - `check_anomaly(symbol)`: Detects price movements using last two data points
+   - `create_rule_service(...)`: Validates and creates alert rules
+   - `list_rules_service()`: Lists alert rules
+   - `update_rule_service(rule_id, updates)`: Validates and updates rules
+   - `list_rule_deliveries_service(rule_id, limit)`: Lists deliveries for a rule
    - Rate limiting: `FixedWindowRateLimiter` (100 req/60s per client IP)
    - Backoff strategy: Exponential with jitter (0.5s → 5s, 0.2s jitter)
 
@@ -63,12 +69,20 @@ Do NOT use plain `print()` statements; always use the logger from `get_logger(__
    - `add_price_point(price, symbol)`: Insert single record with UTC timestamp
    - `get_price_history(symbol, limit=100)`: Fetch latest N records ordered by timestamp DESC
    - `get_last_two(symbol)`: For anomaly detection
+   - `create_rule(...)`, `list_rules()`, `get_rule(rule_id)`, `update_rule(rule_id, updates)`
+   - `create_delivery(...)`, `update_delivery(...)`, `get_rule_deliveries(rule_id, limit)`
 
 4. **API Layer** ([main.py](app/main.py))
    - Lifespan handler: Initializes DB on app startup
    - `POST /collect-once/{symbol}`: Collect & store single price point
+   - `GET /history/{symbol}`: Read price history
+   - `GET /anomaly/{symbol}`: Compare last two points
+   - `POST /rules`: Create an alert rule
+   - `GET /rules`: List alert rules
+   - `PATCH /rules/{id}`: Update rule configuration (enabled, threshold, cooldown, webhook, direction)
+   - `GET /rules/{id}/deliveries`: List rule deliveries
    - Middleware: Injects trace ID for request tracing
-   - Error responses: 400 (invalid symbol), 503 (API failure), 500 (DB error)
+   - Error responses: 400 (invalid input), 404 (not found), 503 (API failure), 500 (DB error)
 
 ### Data Flow
 
@@ -82,6 +96,16 @@ CoinGecko API
  add_price_point() → [PostgreSQL/SQLite]
       ↓
  HTTP 200 + PricePoint JSON
+
+Rule Management
+   ↓
+POST /rules
+   ↓
+create_rule_service()
+   ↓
+create_rule() → [PostgreSQL/SQLite]
+   ↓
+HTTP 200 + Rule JSON
 ```
 
 ---
@@ -220,6 +244,7 @@ LOG_LEVEL=INFO  # Or DEBUG, WARNING, ERROR
 - Symbol: Whitelist check against `SYMBOL_TO_ID.keys()`
 - Price: No negative prices; respect CoinGecko response format
 - Timestamps: Always UTC, reject future dates in anomaly detection
+- Rule fields: threshold > 0, cooldown >= 0, webhook_url must be http/https
 
 ---
 

@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from app.logging_config import get_logger
 
@@ -13,6 +13,12 @@ SYMBOL_TO_ID: Dict[str, str] = {
     "ADA": "cardano",
     "DOT": "polkadot",
 }
+
+DELIVERY_STATUSES: List[str] = ["PENDING", "SENT", "FAILED"]
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def validate_symbol(symbol: str) -> str:
@@ -45,3 +51,25 @@ class PricePoint(SQLModel, table=True):
     timestamp: datetime
     price: float
     symbol: str = Field(index=True)  # "BTC", "ETH", etc.
+
+
+class Rule(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True)
+    threshold: float
+    is_above: bool
+    webhook_url: str
+    cooldown_seconds: int
+    enabled: bool = Field(default=True, index=True)
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
+class Delivery(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    rule_id: int = Field(foreign_key="rule.id", index=True)
+    triggered_at: datetime = Field(default_factory=_utc_now, index=True)
+    status: str = Field(default="PENDING", index=True)
+    attempts: int = Field(default=0)
+    last_error: Optional[str] = Field(default=None)
+    updated_at: datetime = Field(default_factory=_utc_now)

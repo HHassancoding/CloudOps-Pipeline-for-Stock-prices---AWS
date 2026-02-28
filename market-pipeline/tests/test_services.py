@@ -1,9 +1,17 @@
 """Tests for service layer functions."""
 import pytest
 from unittest.mock import patch, MagicMock
-from app.services import fetch_price, collect_once, check_anomaly
+from app.services import (
+    fetch_price,
+    collect_once,
+    check_anomaly,
+    create_rule_service,
+    update_rule_service,
+    list_rules_service,
+    list_rule_deliveries_service,
+)
 import app.services as services
-from app.models import validate_symbol, SYMBOL_TO_ID
+from app.models import validate_symbol, SYMBOL_TO_ID, Rule, Delivery
 import requests
 
 
@@ -246,3 +254,92 @@ class TestCheckAnomaly:
         assert result["latest_price"] == 51000.0
         assert result["second_last_price"] == 50000.0
         assert result["price_difference"] == 1000.0
+
+
+class TestRuleServices:
+    """Test rule service functions."""
+
+    @patch("app.services.create_rule")
+    def test_create_rule_service_success(self, mock_create_rule):
+        rule = Rule(
+            id=1,
+            symbol="BTC",
+            threshold=50000.0,
+            is_above=True,
+            webhook_url="https://example.com/webhook",
+            cooldown_seconds=300,
+            enabled=True,
+        )
+        mock_create_rule.return_value = rule
+
+        result = create_rule_service(
+            symbol="BTC",
+            threshold=50000.0,
+            is_above=True,
+            webhook_url="https://example.com/webhook",
+            cooldown_seconds=300,
+            enabled=True,
+        )
+
+        assert result.symbol == "BTC"
+        assert result.threshold == 50000.0
+        mock_create_rule.assert_called_once()
+
+    def test_create_rule_service_invalid_threshold(self):
+        with pytest.raises(ValueError):
+            create_rule_service(
+                symbol="BTC",
+                threshold=0,
+                is_above=True,
+                webhook_url="https://example.com/webhook",
+                cooldown_seconds=300,
+                enabled=True,
+            )
+
+    @patch("app.services.update_rule")
+    def test_update_rule_service_success(self, mock_update_rule):
+        rule = Rule(
+            id=1,
+            symbol="BTC",
+            threshold=51000.0,
+            is_above=True,
+            webhook_url="https://example.com/webhook",
+            cooldown_seconds=300,
+            enabled=False,
+        )
+        mock_update_rule.return_value = rule
+
+        result = update_rule_service(1, {"threshold": 51000.0, "enabled": False})
+
+        assert result.enabled is False
+        assert result.threshold == 51000.0
+        mock_update_rule.assert_called_once_with(1, {"threshold": 51000.0, "enabled": False})
+
+    @patch("app.services.update_rule")
+    def test_update_rule_service_not_found(self, mock_update_rule):
+        mock_update_rule.return_value = None
+
+        with pytest.raises(ValueError) as exc_info:
+            update_rule_service(999, {"enabled": False})
+        assert "Rule not found" in str(exc_info.value)
+
+    @patch("app.services.get_rule")
+    @patch("app.services.get_rule_deliveries")
+    def test_list_rule_deliveries_service(self, mock_get_deliveries, mock_get_rule):
+        mock_get_rule.return_value = Rule(
+            id=1,
+            symbol="BTC",
+            threshold=50000.0,
+            is_above=True,
+            webhook_url="https://example.com/webhook",
+            cooldown_seconds=300,
+            enabled=True,
+        )
+        mock_get_deliveries.return_value = [
+            Delivery(id=1, rule_id=1, status="SENT", attempts=1),
+        ]
+
+        result = list_rule_deliveries_service(1, limit=100)
+
+        assert len(result) == 1
+        assert result[0].status == "SENT"
